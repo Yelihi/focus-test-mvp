@@ -54,6 +54,33 @@ export function SessionSummaryPanel({ summary }: SessionSummaryPanelProps) {
         <hr className="border-zinc-200 dark:border-zinc-700" />
 
         <div className="flex justify-between text-sm">
+          <span className="text-zinc-500">Breaks</span>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">
+            {summary.breakCount}
+          </span>
+        </div>
+
+        {summary.avgRecoveryMs > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500">Avg Recovery</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              {formatDuration(summary.avgRecoveryMs)}
+            </span>
+          </div>
+        )}
+
+        {summary.longestContinuousFocusMs > 0 && (
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-500">Longest Focus</span>
+            <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              {formatDuration(summary.longestContinuousFocusMs)}
+            </span>
+          </div>
+        )}
+
+        <hr className="border-zinc-200 dark:border-zinc-700" />
+
+        <div className="flex justify-between text-sm">
           <span className="text-zinc-500">Coverage</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
             {Math.round(summary.coveragePercent)}%

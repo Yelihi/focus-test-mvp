@@ -45,21 +45,62 @@ export interface SessionSummary {
   segments: FocusSegment[];
   coveragePercent: number;
   effectiveSampleRateHz: number;
+  breakCount: number;
+  breaks: BreakLog[];
+  longestContinuousFocusMs: number;
+  totalBreakMs: number;
+  avgRecoveryMs: number;
 }
 
 /** A single session history entry for list display */
 export interface SessionHistoryEntry {
   sessionId: string;
-  startedAt: number; // Date.now() — session start wall-clock
-  endedAt: number; // Date.now() — session end (pause) wall-clock
-  status: "paused" | "stopped";
+  startedAt: number;
+  endedAt: number;
+  status: "stopped";
   durationMs: number;
-  focusedMs: number; // focusPercent / 100 * durationMs
+  focusedMs: number;
   focusPercent: number;
+  breakCount: number;
+  breaks: BreakLog[];
+  goal?: SessionGoal;
 }
 
-/** Study mode: desktop (screen) or book (looking down) */
-export type StudyMode = "desktop" | "book";
+/** Study mode: work (screen) or reading (looking down) */
+export type StudyMode = "work" | "reading";
+
+/** Reason for taking a break */
+export type BreakReason = "phone" | "bathroom" | "sns" | "news" | "colleague" | "fatigue" | "other";
+
+/** A single break log entry */
+export interface BreakLog {
+  breakId: string;
+  reason: BreakReason;
+  memo?: string;
+  firstStep: string;
+  timerMinutes?: number;
+  startedAt: number;
+  resumedAt?: number;
+  recoveryMs?: number;
+}
+
+/** Session lifecycle status */
+export type SessionStatus = "idle" | "running" | "break" | "stopped";
+
+/** Goal for a session */
+export interface SessionGoal {
+  targetHours: number;
+  targetMinutes: number;
+  targetFocusPercent: number;
+}
+
+/** Activity log entry for timeline display */
+export interface ActivityLogEntry {
+  id: string;
+  type: 'session_start' | 'session_stop' | 'break_start' | 'break_end' | 'distracted';
+  timestamp: number;
+  message: string;
+}
 
 /** Session configuration */
 export interface SessionConfig {

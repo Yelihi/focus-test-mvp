@@ -120,6 +120,18 @@ export function transition(
   return { state, changed: false, newState: state.currentState };
 }
 
+/** Get the longest continuous focused segment duration in ms */
+export function getLongestContinuousFocus(segments: FocusSegment[]): number {
+  let max = 0;
+  for (const seg of segments) {
+    if (seg.state === "focused") {
+      const dur = seg.endMs - seg.startMs;
+      if (dur > max) max = dur;
+    }
+  }
+  return max;
+}
+
 /** Finalize the state machine — close the last open segment */
 export function finalize(
   state: StateMachineState,

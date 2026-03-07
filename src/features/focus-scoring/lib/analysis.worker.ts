@@ -6,19 +6,26 @@ import type {
   StateUpdateMessage,
   CoverageUpdateMessage,
   SessionSummaryMessage,
+  DistractedAlertMessage,
 } from "@/shared/types/messages";
 import type {
   SessionConfig,
   FocusState,
   StudyMode,
   SessionSummary,
+  FocusSegment,
 } from "@/entities/focus-session";
-import { DEFAULT_SESSION_CONFIG, COVERAGE_UPDATE_INTERVAL_MS } from "@/entities/focus-session";
+import {
+  DEFAULT_SESSION_CONFIG,
+  COVERAGE_UPDATE_INTERVAL_MS,
+  DISTRACTED_ALERT_THRESHOLD_MS,
+} from "@/entities/focus-session";
 import { computeFocusScore } from "./focusScorer";
 import {
   createStateMachine,
   transition,
   finalize,
+  getLongestContinuousFocus,
   type StateMachineState,
   type StateMachineConfig,
 } from "./stateMachine";
@@ -36,7 +43,7 @@ const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 let sessionId: string | null = null;
 let config: SessionConfig = DEFAULT_SESSION_CONFIG;
-let studyMode: StudyMode = "desktop";
+let studyMode: StudyMode = "work";
 let smState: StateMachineState | null = null;
 let coverageState: CoverageState | null = null;
 let heartbeatIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -44,6 +51,13 @@ let coverageIntervalId: ReturnType<typeof setInterval> | null = null;
 let lastStateUpdate: FocusState | null = null;
 let lastKeepAliveMs = 0;
 let sessionStartMs = 0;
+
+// Accumulated segments from previous pause/resume cycles
+let accumulatedSegments: FocusSegment[] = [];
+
+// Distracted alert tracking
+let distractedStartMs = 0;
+let distractedAlertSent = false;
 
 // ── Helpers ────────────────────────────────────────────────────
 
@@ -62,8 +76,13 @@ function sendCoverageUpdate(): void {
   post(coverage);
 }
 
+function getAllSegments(endMs: number): FocusSegment[] {
+  const currentSegments = smState ? finalize(smState, endMs) : [];
+  return [...accumulatedSegments, ...currentSegments];
+}
+
 function buildSummary(endMs: number): SessionSummary {
-  const segments = smState ? finalize(smState, endMs) : [];
+  const segments = getAllSegments(endMs);
   const durationMs = endMs - sessionStartMs;
 
   let focusMs = 0;
@@ -92,6 +111,12 @@ function buildSummary(endMs: number): SessionSummary {
     effectiveSampleRateHz: coverageState
       ? getEffectiveSampleRate(coverageState, endMs)
       : 0,
+    // Break fields are filled by SessionManager (worker doesn't track breaks)
+    breakCount: 0,
+    breaks: [],
+    longestContinuousFocusMs: getLongestContinuousFocus(segments),
+    totalBreakMs: 0,
+    avgRecoveryMs: 0,
   };
 }
 
@@ -102,6 +127,9 @@ function resetSession(): void {
   lastStateUpdate = null;
   lastKeepAliveMs = 0;
   sessionStartMs = 0;
+  accumulatedSegments = [];
+  distractedStartMs = 0;
+  distractedAlertSent = false;
 
   if (heartbeatIntervalId !== null) {
     clearInterval(heartbeatIntervalId);
@@ -111,6 +139,21 @@ function resetSession(): void {
     clearInterval(coverageIntervalId);
     coverageIntervalId = null;
   }
+}
+
+function stopCoverageInterval(): void {
+  if (coverageIntervalId !== null) {
+    clearInterval(coverageIntervalId);
+    coverageIntervalId = null;
+  }
+}
+
+function startCoverageInterval(): void {
+  stopCoverageInterval();
+  coverageIntervalId = setInterval(
+    sendCoverageUpdate,
+    COVERAGE_UPDATE_INTERVAL_MS,
+  );
 }
 
 // ── Message handler ────────────────────────────────────────────
@@ -126,7 +169,7 @@ ctx.addEventListener("message", (e: MessageEvent<MainToWorkerMessage>) => {
       studyMode = config.studyMode;
       sessionStartMs = performance.now();
 
-      const smConfig: import("./stateMachine").StateMachineConfig = {
+      const smConfig: StateMachineConfig = {
         focusThreshold: config.focusThreshold,
         distractedThreshold: config.distractedThreshold,
         hysteresisFrames: config.hysteresisFrames,
@@ -134,11 +177,7 @@ ctx.addEventListener("message", (e: MessageEvent<MainToWorkerMessage>) => {
       smState = createStateMachine(smConfig);
       coverageState = createCoverageTracker(sessionStartMs, config.targetFps);
 
-      // Periodic coverage updates
-      coverageIntervalId = setInterval(
-        sendCoverageUpdate,
-        COVERAGE_UPDATE_INTERVAL_MS,
-      );
+      startCoverageInterval();
       break;
     }
 
@@ -150,13 +189,34 @@ ctx.addEventListener("message", (e: MessageEvent<MainToWorkerMessage>) => {
 
       recordSample(coverageState, signals.timestamp);
 
-      const smConfig: import("./stateMachine").StateMachineConfig = {
+      const smConfig: StateMachineConfig = {
         focusThreshold: config.focusThreshold,
         distractedThreshold: config.distractedThreshold,
         hysteresisFrames: config.hysteresisFrames,
       };
       const result = transition(smState, focusScore, signals.timestamp, smConfig);
       smState = result.state;
+
+      // Distracted alert tracking
+      if (result.newState === "distracted" || result.newState === "absent") {
+        if (distractedStartMs === 0) {
+          distractedStartMs = performance.now();
+          distractedAlertSent = false;
+        } else if (!distractedAlertSent) {
+          const elapsed = performance.now() - distractedStartMs;
+          if (elapsed >= DISTRACTED_ALERT_THRESHOLD_MS) {
+            distractedAlertSent = true;
+            const alert: DistractedAlertMessage = {
+              type: "DISTRACTED_ALERT",
+              distractedMs: elapsed,
+            };
+            post(alert);
+          }
+        }
+      } else {
+        distractedStartMs = 0;
+        distractedAlertSent = false;
+      }
 
       const now = performance.now();
       const shouldSend =
@@ -177,9 +237,42 @@ ctx.addEventListener("message", (e: MessageEvent<MainToWorkerMessage>) => {
       break;
     }
 
+    case "SESSION_PAUSE": {
+      // Finalize current segments but keep session alive
+      const now = performance.now();
+      if (smState) {
+        const currentSegments = finalize(smState, now);
+        accumulatedSegments = [...accumulatedSegments, ...currentSegments];
+        smState = null;
+      }
+      stopCoverageInterval();
+      distractedStartMs = 0;
+      distractedAlertSent = false;
+      break;
+    }
+
+    case "SESSION_RESUME": {
+      // Create fresh state machine, preserving accumulated segments
+      const smConfig: StateMachineConfig = {
+        focusThreshold: config.focusThreshold,
+        distractedThreshold: config.distractedThreshold,
+        hysteresisFrames: config.hysteresisFrames,
+      };
+      smState = createStateMachine(smConfig);
+      // Re-init coverage from now
+      if (coverageState) {
+        const now = performance.now();
+        coverageState = createCoverageTracker(now, config.targetFps);
+      }
+      startCoverageInterval();
+      distractedStartMs = 0;
+      distractedAlertSent = false;
+      break;
+    }
+
     case "SESSION_STOP": {
       const endMs = performance.now();
-      if (smState) {
+      if (smState || accumulatedSegments.length > 0) {
         const summary = buildSummary(endMs);
         const summaryMsg: SessionSummaryMessage = {
           type: "SESSION_SUMMARY",

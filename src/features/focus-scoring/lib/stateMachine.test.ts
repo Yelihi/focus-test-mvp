@@ -4,7 +4,9 @@ import {
   classifyScore,
   transition,
   finalize,
+  getLongestContinuousFocus,
 } from "./stateMachine";
+import type { FocusSegment } from "@/entities/focus-session";
 
 describe("classifyScore", () => {
   it("classifies >= 0.6 as focused", () => {
@@ -37,7 +39,6 @@ describe("stateMachine transitions", () => {
 
   it("does not change state before hysteresis threshold", () => {
     let sm = createStateMachine();
-    // Feed 2 distracted scores (below hysteresis of 3)
     const r1 = transition(sm, 0.4, 100, config);
     const r2 = transition(r1.state, 0.4, 200, config);
     expect(r2.newState).toBe("focused");
@@ -47,7 +48,6 @@ describe("stateMachine transitions", () => {
   it("changes state after hysteresis threshold", () => {
     let sm = createStateMachine();
     let result;
-    // Feed 3 distracted scores (meets hysteresis of 3)
     result = transition(sm, 0.4, 100, config);
     result = transition(result.state, 0.4, 200, config);
     result = transition(result.state, 0.4, 300, config);
@@ -58,11 +58,11 @@ describe("stateMachine transitions", () => {
   it("resets candidate count when original state score returns", () => {
     let sm = createStateMachine();
     let result;
-    result = transition(sm, 0.4, 100, config); // distracted candidate +1
-    result = transition(result.state, 0.4, 200, config); // distracted candidate +2
-    result = transition(result.state, 0.8, 300, config); // focused → reset
-    result = transition(result.state, 0.4, 400, config); // restart distracted +1
-    result = transition(result.state, 0.4, 500, config); // +2
+    result = transition(sm, 0.4, 100, config);
+    result = transition(result.state, 0.4, 200, config);
+    result = transition(result.state, 0.8, 300, config);
+    result = transition(result.state, 0.4, 400, config);
+    result = transition(result.state, 0.4, 500, config);
     expect(result.changed).toBe(false);
     expect(result.newState).toBe("focused");
   });
@@ -80,10 +80,8 @@ describe("stateMachine transitions", () => {
   it("creates segments on state transitions", () => {
     let sm = createStateMachine();
     let result;
-    // focused frames
     result = transition(sm, 0.8, 100, config);
     result = transition(result.state, 0.8, 200, config);
-    // transition to distracted (3 frames for hysteresis)
     result = transition(result.state, 0.4, 300, config);
     result = transition(result.state, 0.4, 400, config);
     result = transition(result.state, 0.4, 500, config);
@@ -93,5 +91,34 @@ describe("stateMachine transitions", () => {
     expect(segments.length).toBe(2);
     expect(segments[0].state).toBe("focused");
     expect(segments[1].state).toBe("distracted");
+  });
+});
+
+describe("getLongestContinuousFocus", () => {
+  it("returns 0 for empty segments", () => {
+    expect(getLongestContinuousFocus([])).toBe(0);
+  });
+
+  it("returns 0 when no focused segments exist", () => {
+    const segments: FocusSegment[] = [
+      { state: "distracted", startMs: 0, endMs: 1000, avgScore: 0.4 },
+    ];
+    expect(getLongestContinuousFocus(segments)).toBe(0);
+  });
+
+  it("returns the longest focused segment duration", () => {
+    const segments: FocusSegment[] = [
+      { state: "focused", startMs: 0, endMs: 5000, avgScore: 0.8 },
+      { state: "distracted", startMs: 5000, endMs: 7000, avgScore: 0.4 },
+      { state: "focused", startMs: 7000, endMs: 20000, avgScore: 0.9 },
+    ];
+    expect(getLongestContinuousFocus(segments)).toBe(13000);
+  });
+
+  it("handles single focused segment", () => {
+    const segments: FocusSegment[] = [
+      { state: "focused", startMs: 100, endMs: 5100, avgScore: 0.8 },
+    ];
+    expect(getLongestContinuousFocus(segments)).toBe(5000);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import type { FocusState } from "@/entities/focus-session";
+import type { FocusState, StudyMode } from "@/entities/focus-session";
 
 interface FocusHUDProps {
   focusState: FocusState;
@@ -9,6 +9,8 @@ interface FocusHUDProps {
   coveragePercent: number;
   elapsedMs: number;
   isActive: boolean;
+  breakCount: number;
+  studyMode: StudyMode;
 }
 
 const STATE_COLORS: Record<FocusState, string> = {
@@ -37,18 +39,23 @@ export function FocusHUD({
   coveragePercent,
   elapsedMs,
   isActive,
+  breakCount,
+  studyMode,
 }: FocusHUDProps) {
   if (!isActive) return null;
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      {/* State indicator */}
+      {/* State indicator + mode badge */}
       <div className="flex items-center gap-3">
         <div
           className={`h-4 w-4 rounded-full ${STATE_COLORS[focusState]}`}
         />
         <span className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
           {STATE_LABELS[focusState]}
+        </span>
+        <span className="ml-auto rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+          {studyMode === "work" ? "Work" : "Reading"}
         </span>
       </div>
 
@@ -86,6 +93,14 @@ export function FocusHUD({
           </span>{" "}
           confidence
         </div>
+        {breakCount > 0 && (
+          <div>
+            <span className="font-medium text-zinc-700 dark:text-zinc-300">
+              {breakCount}
+            </span>{" "}
+            breaks
+          </div>
+        )}
       </div>
     </div>
   );
