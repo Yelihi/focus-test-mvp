@@ -66,44 +66,52 @@ describe("computeFocusScore", () => {
     expect(tilted.focusScore).toBeLessThan(forward.focusScore);
   });
 
-  describe("book mode", () => {
-    it("gives high score with pitch 30° (book reading posture)", () => {
+  describe("reading mode", () => {
+    it("gives high score with pitch 30° (reading posture)", () => {
       const { focusScore } = computeFocusScore(
         makeSignals({ headPitch: 30 }),
-        "book",
+        "reading",
       );
       expect(focusScore).toBeGreaterThan(0.7);
     });
 
-    it("does not penalise lookDown in book mode", () => {
+    it("does not penalise lookDown in reading mode", () => {
       const withLookDown = computeFocusScore(
         makeSignals({ eyeLookDownLeft: 0.8, eyeLookDownRight: 0.8 }),
-        "book",
+        "reading",
       );
-      const neutral = computeFocusScore(makeSignals(), "book");
+      const neutral = computeFocusScore(makeSignals(), "reading");
       expect(withLookDown.focusScore).toBeCloseTo(neutral.focusScore, 1);
     });
 
-    it("still penalises lookDown in desktop mode", () => {
-      const neutral = computeFocusScore(makeSignals(), "desktop");
+    it("still penalises lookDown in work mode", () => {
+      const neutral = computeFocusScore(makeSignals(), "work");
       const withLookDown = computeFocusScore(
         makeSignals({ eyeLookDownLeft: 0.8, eyeLookDownRight: 0.8 }),
-        "desktop",
+        "work",
       );
       expect(withLookDown.focusScore).toBeLessThan(neutral.focusScore);
     });
 
-    it("penalises pitch 30° more in desktop mode than book mode", () => {
-      const desktop = computeFocusScore(
+    it("penalises pitch 30° more in work mode than reading mode", () => {
+      const work = computeFocusScore(
         makeSignals({ headPitch: 30 }),
-        "desktop",
+        "work",
       );
-      const book = computeFocusScore(
+      const reading = computeFocusScore(
         makeSignals({ headPitch: 30 }),
-        "book",
+        "reading",
       );
-      expect(book.focusScore).toBeGreaterThan(desktop.focusScore);
+      expect(reading.focusScore).toBeGreaterThan(work.focusScore);
     });
+  });
+
+  it("mild distraction (lookOut=0.5 + headYaw=15°) drops work score below focusThreshold", () => {
+    const { focusScore } = computeFocusScore(
+      makeSignals({ eyeLookOutLeft: 0.5, eyeLookOutRight: 0.5, headYaw: 15 }),
+      "work",
+    );
+    expect(focusScore).toBeLessThan(0.6);
   });
 
   it("returns score clamped between 0 and 1", () => {

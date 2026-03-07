@@ -43,16 +43,6 @@ export function SessionHistoryList({ entries }: SessionHistoryListProps) {
               {formatTime(entry.startedAt)} ~ {formatTime(entry.endedAt)}
             </span>
 
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                entry.status === "paused"
-                  ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                  : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-              }`}
-            >
-              {entry.status === "paused" ? "Paused" : "Stopped"}
-            </span>
-
             <span className="font-medium text-zinc-900 dark:text-zinc-100">
               {formatDuration(entry.focusedMs)}
             </span>
@@ -60,6 +50,12 @@ export function SessionHistoryList({ entries }: SessionHistoryListProps) {
             <span className="font-medium text-green-600">
               {Math.round(entry.focusPercent)}%
             </span>
+
+            {entry.breakCount > 0 && (
+              <span className="text-xs text-zinc-400">
+                {entry.breakCount} breaks
+              </span>
+            )}
           </div>
         ))}
       </div>

@@ -23,6 +23,14 @@ export interface SessionStopMessage {
   type: "SESSION_STOP";
 }
 
+export interface SessionPauseMessage {
+  type: "SESSION_PAUSE";
+}
+
+export interface SessionResumeMessage {
+  type: "SESSION_RESUME";
+}
+
 export interface HeartbeatAckMessage {
   type: "HEARTBEAT_ACK";
   timestamp: number;
@@ -46,6 +54,8 @@ export type MainToWorkerMessage =
   | SessionStartMessage
   | SignalsMessage
   | SessionStopMessage
+  | SessionPauseMessage
+  | SessionResumeMessage
   | HeartbeatAckMessage
   | StartHeartbeatMessage
   | StopHeartbeatMessage
@@ -80,9 +90,15 @@ export interface HeartbeatTickMessage {
   timestamp: number;
 }
 
+export interface DistractedAlertMessage {
+  type: "DISTRACTED_ALERT";
+  distractedMs: number;
+}
+
 export type WorkerToMainMessage =
   | WorkerReadyMessage
   | StateUpdateMessage
   | CoverageUpdateMessage
   | SessionSummaryMessage
-  | HeartbeatTickMessage;
+  | HeartbeatTickMessage
+  | DistractedAlertMessage;
