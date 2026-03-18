@@ -1,1 +1,1 @@
-export { ActivityLog } from "./ui/ActivityLog";
+export { ActivityLog } from "./ui";

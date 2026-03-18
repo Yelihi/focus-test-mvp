@@ -1,5 +1,5 @@
 import type { SessionSummary, BreakReason } from "@/entities/focus-session";
-import { BREAK_REASON_LABELS } from "@/entities/focus-session";
+import { focusSessionBehavior } from "@/entities/focus-session";
 
 export interface PatternAnalysis {
   topBreakReason: { reason: BreakReason; count: number } | null;
@@ -36,7 +36,7 @@ export function analyzePatterns(summary: SessionSummary): PatternAnalysis {
   // Top break reason comment
   if (topBreakReason && topBreakReason.count >= 2) {
     comments.push(
-      `${BREAK_REASON_LABELS[topBreakReason.reason]}이(가) 주요 중단 원인입니다. (${topBreakReason.count}회)`,
+      `${focusSessionBehavior.getBreakReasonLabel(topBreakReason.reason)}이(가) 주요 중단 원인입니다. (${topBreakReason.count}회)`,
     );
   }
 

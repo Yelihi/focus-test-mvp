@@ -1,4 +1,4 @@
-import { COVERAGE_UPDATE_INTERVAL_MS } from "@/entities/focus-session";
+import { COVERAGE_UPDATE_INTERVAL_MS } from "@/shared/config/timing";
 
 export interface CoverageState {
   sessionStartMs: number;

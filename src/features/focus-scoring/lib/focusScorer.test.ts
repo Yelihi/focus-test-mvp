@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeFocusScore } from "./focusScorer";
-import type { FaceSignals } from "@/entities/focus-session";
+import type { FaceSignals } from "@/entities/face-signal";
 
 function makeSignals(overrides: Partial<FaceSignals> = {}): FaceSignals {
   return {
@@ -21,6 +21,7 @@ function makeSignals(overrides: Partial<FaceSignals> = {}): FaceSignals {
     headRoll: 0,
     faceDetectionConfidence: 1.0,
     timestamp: 1000,
+    phoneDetected: false,
     ...overrides,
   };
 }
@@ -106,12 +107,33 @@ describe("computeFocusScore", () => {
     });
   });
 
-  it("mild distraction (lookOut=0.5 + headYaw=15°) drops work score below focusThreshold", () => {
+  it("mild distraction (lookOut=0.5 + headYaw=15°) does NOT drop below focusThreshold", () => {
+    // Looking briefly sideways without turning head is still considered focused
     const { focusScore } = computeFocusScore(
       makeSignals({ eyeLookOutLeft: 0.5, eyeLookOutRight: 0.5, headYaw: 15 }),
       "work",
     );
+    expect(focusScore).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it("strong distraction (lookOut=0.9 + headYaw=50°) drops work score below focusThreshold", () => {
+    const { focusScore } = computeFocusScore(
+      makeSignals({ eyeLookOutLeft: 0.9, eyeLookOutRight: 0.9, headYaw: 50 }),
+      "work",
+    );
     expect(focusScore).toBeLessThan(0.6);
+  });
+
+  it("returns distracted score (0.35) when phone detected", () => {
+    const { focusScore } = computeFocusScore(makeSignals({ phoneDetected: true }), "work");
+    expect(focusScore).toBe(0.35);
+  });
+
+  it("phone detection overrides normal scoring (even with perfect signals)", () => {
+    const { focusScore } = computeFocusScore(
+      makeSignals({ phoneDetected: true, faceDetectionConfidence: 1.0, earLeft: 0.4, earRight: 0.4 }),
+    );
+    expect(focusScore).toBeLessThan(0.6); // below focusThreshold
   });
 
   it("returns score clamped between 0 and 1", () => {

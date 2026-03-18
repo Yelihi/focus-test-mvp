@@ -1,1 +1,1 @@
-export { FocusHUD } from "./FocusHUD";
+export { FocusHUD } from "./ui/FocusHUD";

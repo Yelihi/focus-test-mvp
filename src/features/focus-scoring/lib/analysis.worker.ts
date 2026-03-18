@@ -15,11 +15,11 @@ import type {
   SessionSummary,
   FocusSegment,
 } from "@/entities/focus-session";
+import { DEFAULT_SESSION_CONFIG } from "@/entities/focus-session";
 import {
-  DEFAULT_SESSION_CONFIG,
   COVERAGE_UPDATE_INTERVAL_MS,
   DISTRACTED_ALERT_THRESHOLD_MS,
-} from "@/entities/focus-session";
+} from "@/shared/config/timing";
 import { computeFocusScore } from "./focusScorer";
 import {
   createStateMachine,
@@ -90,20 +90,20 @@ function buildSummary(endMs: number): SessionSummary {
   let absentMs = 0;
 
   for (const seg of segments) {
-    const segDuration = seg.endMs - seg.startMs;
+    const segDuration = Math.max(0, seg.endMs - seg.startMs);
     if (seg.state === "focused") focusMs += segDuration;
     else if (seg.state === "distracted") distractedMs += segDuration;
     else absentMs += segDuration;
   }
 
-  const total = focusMs + distractedMs + absentMs || 1;
+  const safeDuration = Math.max(1, durationMs);
 
   return {
     sessionId: sessionId ?? "unknown",
     durationMs,
-    focusPercent: (focusMs / total) * 100,
-    distractedPercent: (distractedMs / total) * 100,
-    absentPercent: (absentMs / total) * 100,
+    focusPercent: Math.min(100, (focusMs / safeDuration) * 100),
+    distractedPercent: Math.min(100, (distractedMs / safeDuration) * 100),
+    absentPercent: Math.min(100, (absentMs / safeDuration) * 100),
     segments,
     coveragePercent: coverageState
       ? getCoveragePercent(coverageState, endMs)

@@ -1,4 +1,4 @@
-import type { FocusState } from "@/entities/focus-session/model";
+import type { FocusState } from "@/entities/focus-session/models";
 
 export interface PipCanvasRenderer {
   readonly pipVideo: HTMLVideoElement;

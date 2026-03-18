@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionStatus } from "@/entities/focus-session/model";
+import type { SessionStatus } from "@/entities/focus-session/models";
 
 interface ActionButtonsProps {
   status: SessionStatus;

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "clean-architecture": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "236593739207d4901b24878f3a4ce1b49b4eab2df527569f600605ab47d65607"
+    },
+    "commit-convention-reviewer": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "385cd4feeeb6fd1e937f9092a58185fbdbb2e5fc3ec89aa1b691ebc1b72b7fed"
+    },
+    "deploy-to-vercel": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "2a902fd0b8f07fa82834ee6fc5410d32d688951586c9a748e856b0b26d996c30"
+    },
+    "karpathy-guidelines": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "450fb989966b75c04a2621dacf704755911ccfec5190aff28728da99ea4dae57"
+    },
+    "vercel-composition-patterns": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "ab2703c951ceea9360ed606bd5f9014b871a05fee32e63ab2305c2bc5ff84ffe"
+    },
+    "vercel-react-best-practices": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "fdeb99782022bdd359c28439c6c287f9157ae8ea707c42e86dc3241b1f66c31b"
+    },
+    "web-design-guidelines": {
+      "source": "Yelihi/ai-skills",
+      "sourceType": "github",
+      "computedHash": "9a5ead209a7dece989a5167b241e7592d5c04db658ee5f06443c18c29760f6c8"
+    }
+  }
+}

@@ -1,54 +1,39 @@
+import type { FaceSignals } from "@/entities/face-signal";
 import type {
-  FaceSignals,
   SessionConfig,
   SessionSummary,
-  FocusState,
   StudyMode,
-  SessionStatus,
   BreakLog,
 } from "@/entities/focus-session";
-import { DEFAULT_SESSION_CONFIG, HEARTBEAT_INTERVAL_MS } from "@/entities/focus-session";
+import { DEFAULT_SESSION_CONFIG } from "@/entities/focus-session";
+import { HEARTBEAT_INTERVAL_MS } from "@/shared/config/timing";
 import type { WorkerToMainMessage } from "@/shared/types/messages";
 import { WorkerBridge } from "@/shared/lib/workerBridge";
-import { CaptureLoop } from "@/features/detection";
+import type { SessionState, StateListener, DistractedAlertListener, ICaptureController } from "../model";
+import { ElapsedTimer } from "./elapsedTimer";
+import { BreakBookkeeper } from "./breakBookkeeper";
 
-export type { SessionStatus };
-
-export interface SessionState {
-  status: SessionStatus;
-  focusState: FocusState;
-  focusScore: number;
-  confidence: number;
-  coveragePercent: number;
-  effectiveSampleRateHz: number;
-  elapsedMs: number;
-  summary: SessionSummary | null;
-  breakCount: number;
-}
-
-type StateListener = (state: SessionState) => void;
-type DistractedAlertListener = (distractedMs: number) => void;
+export type { SessionState };
+export type { SessionStatus } from "../model";
 
 export class SessionManager {
   private bridge: WorkerBridge;
-  private captureLoop: CaptureLoop;
+  private capture: ICaptureController;
   private config: SessionConfig;
   private state: SessionState;
   private listeners = new Set<StateListener>();
   private distractedAlertListeners = new Set<DistractedAlertListener>();
   private sessionId: string | null = null;
-  private startTime = 0;
-  private totalPausedMs = 0;
-  private breakStartMs = 0;
-  private elapsedTimerId: ReturnType<typeof setInterval> | null = null;
+  private timer = new ElapsedTimer();
+  private breaks = new BreakBookkeeper();
   private videoEl: HTMLVideoElement | null = null;
   private landmarker: import("@mediapipe/tasks-vision").FaceLandmarker | null = null;
-  private breakLogs: BreakLog[] = [];
+  private objectDetector: import("@mediapipe/tasks-vision").ObjectDetector | null = null;
 
-  constructor(config: Partial<SessionConfig> = {}) {
+  constructor(config: Partial<SessionConfig> = {}, captureController: ICaptureController) {
     this.config = { ...DEFAULT_SESSION_CONFIG, ...config };
     this.bridge = new WorkerBridge();
-    this.captureLoop = new CaptureLoop(this.config.targetFps);
+    this.capture = captureController;
     this.state = this.createInitialState();
   }
 
@@ -108,12 +93,8 @@ export class SessionManager {
         });
         break;
       case "SESSION_SUMMARY": {
-        // Enrich summary with break data from SessionManager
-        const summary = this.enrichSummary(msg.summary);
-        this.updateState({
-          status: "stopped",
-          summary,
-        });
+        const summary = this.breaks.enrichSummary(msg.summary);
+        this.updateState({ status: "stopped", summary });
         break;
       }
       case "HEARTBEAT_TICK":
@@ -128,38 +109,16 @@ export class SessionManager {
     }
   };
 
-  private enrichSummary(summary: SessionSummary): SessionSummary {
-    const totalBreakMs = this.breakLogs.reduce(
-      (sum, b) => sum + (b.recoveryMs ?? 0),
-      0,
-    );
-    const recoveries = this.breakLogs
-      .filter((b) => b.recoveryMs != null)
-      .map((b) => b.recoveryMs!);
-    const avgRecoveryMs =
-      recoveries.length > 0
-        ? recoveries.reduce((a, b) => a + b, 0) / recoveries.length
-        : 0;
-
-    return {
-      ...summary,
-      breakCount: this.breakLogs.length,
-      breaks: [...this.breakLogs],
-      totalBreakMs,
-      avgRecoveryMs,
-    };
-  }
-
   async start(
     video: HTMLVideoElement,
     landmarker: import("@mediapipe/tasks-vision").FaceLandmarker,
+    objectDetector?: import("@mediapipe/tasks-vision").ObjectDetector,
   ): Promise<void> {
     this.videoEl = video;
     this.landmarker = landmarker;
+    this.objectDetector = objectDetector ?? null;
     this.sessionId = crypto.randomUUID();
-    this.startTime = performance.now();
-    this.totalPausedMs = 0;
-    this.breakLogs = [];
+    this.breaks.reset();
 
     this.updateState({
       ...this.createInitialState(),
@@ -172,84 +131,57 @@ export class SessionManager {
       config: this.config,
     });
 
-    this.captureLoop.start(video, landmarker, (signals: FaceSignals) => {
+    this.capture.start(video, landmarker, (signals: FaceSignals) => {
       this.bridge.send({ type: "SIGNALS", signals });
-    });
+    }, this.objectDetector ?? undefined);
 
-    this.startElapsedTimer();
-  }
-
-  private startElapsedTimer(): void {
-    this.stopElapsedTimer();
-    this.elapsedTimerId = setInterval(() => {
+    this.timer.start((elapsedMs) => {
       if (this.state.status === "running") {
-        this.updateState({
-          elapsedMs: performance.now() - this.startTime - this.totalPausedMs,
-        });
+        this.updateState({ elapsedMs });
       }
-    }, 1000);
-  }
-
-  private stopElapsedTimer(): void {
-    if (this.elapsedTimerId) {
-      clearInterval(this.elapsedTimerId);
-      this.elapsedTimerId = null;
-    }
+    });
   }
 
   takeBreak(): void {
     if (this.state.status !== "running") return;
 
-    this.captureLoop.stop();
+    this.capture.stop();
     this.bridge.send({ type: "SESSION_PAUSE" });
     this.bridge.send({ type: "STOP_HEARTBEAT" });
-    this.breakStartMs = performance.now();
+    this.timer.pause();
 
-    this.updateState({
-      status: "break",
-    });
+    this.updateState({ status: "break" });
   }
 
   addBreakLog(log: BreakLog): void {
-    this.breakLogs.push(log);
-    this.updateState({ breakCount: this.breakLogs.length });
+    this.breaks.addLog(log);
+    this.updateState({ breakCount: this.breaks.count });
   }
 
   resume(): void {
     if (this.state.status !== "break") return;
 
-    const now = performance.now();
-    if (this.breakStartMs > 0) {
-      this.totalPausedMs += now - this.breakStartMs;
-      this.breakStartMs = 0;
-    }
-
+    this.timer.resume();
     this.bridge.send({ type: "SESSION_RESUME" });
 
     if (this.videoEl && this.landmarker) {
-      this.captureLoop.start(this.videoEl, this.landmarker, (signals: FaceSignals) => {
+      this.capture.start(this.videoEl, this.landmarker, (signals: FaceSignals) => {
         this.bridge.send({ type: "SIGNALS", signals });
-      });
+      }, this.objectDetector ?? undefined);
     }
 
-    this.updateState({
-      status: "running",
-    });
+    this.updateState({ status: "running" });
   }
 
   stop(): void {
     if (this.state.status === "idle") return;
 
-    this.captureLoop.stop();
-
-    if (this.state.status === "break" && this.breakStartMs > 0) {
-      this.totalPausedMs += performance.now() - this.breakStartMs;
-      this.breakStartMs = 0;
-    }
+    this.capture.stop();
+    this.timer.finalizePause();
+    this.timer.stop();
 
     this.bridge.send({ type: "SESSION_STOP" });
     this.bridge.send({ type: "STOP_HEARTBEAT" });
-    this.stopElapsedTimer();
     // State will be updated to "stopped" when SESSION_SUMMARY arrives
   }
 
@@ -257,7 +189,7 @@ export class SessionManager {
     if (this.state.status !== "running") return;
 
     if (document.hidden) {
-      this.captureLoop.enterBackground();
+      this.capture.enterBackground();
       this.bridge.send({
         type: "START_HEARTBEAT",
         intervalMs: HEARTBEAT_INTERVAL_MS,
@@ -265,17 +197,17 @@ export class SessionManager {
     } else {
       this.bridge.send({ type: "STOP_HEARTBEAT" });
       if (this.videoEl && this.landmarker) {
-        this.captureLoop.enterForeground();
+        this.capture.enterForeground();
       }
     }
   };
 
   destroy(): void {
-    this.captureLoop.stop();
+    this.capture.stop();
     this.bridge.off(this.handleWorkerMessage);
     this.bridge.terminate();
     document.removeEventListener("visibilitychange", this.handleVisibilityChange);
-    this.stopElapsedTimer();
+    this.timer.stop();
     this.listeners.clear();
     this.distractedAlertListeners.clear();
   }
@@ -290,7 +222,7 @@ export class SessionManager {
   }
 
   getBreakLogs(): BreakLog[] {
-    return [...this.breakLogs];
+    return this.breaks.getLogs();
   }
 
   getSessionId(): string | null {

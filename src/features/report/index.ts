@@ -1,2 +1,2 @@
-export { ReportPanel } from "./ui/ReportPanel";
-export { analyzePatterns } from "./lib/analyzePatterns";
+export { ReportPanel } from "./ui";
+export { analyzePatterns } from "./lib";

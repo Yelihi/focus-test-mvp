@@ -5,8 +5,9 @@ import type {
   ActivityLogEntry,
   SessionStatus,
   StudyMode,
-} from "@/entities/focus-session/model";
+} from "@/entities/focus-session/models";
 import { ActivityLog } from "@/features/activity-log";
+import { ProgressBar } from "@/shared/ui";
 
 interface MonitoringSidebarProps {
   goal: SessionGoal | null;
@@ -104,13 +105,7 @@ export function MonitoringSidebar({
           <p className="mt-1 text-3xl font-bold text-white">
             {focusPercent} <span className="text-lg font-normal text-zinc-400">%</span>
           </p>
-          {/* Progress bar */}
-          <div className="mt-3 h-1 overflow-hidden bg-zinc-700">
-            <div
-              className="h-full bg-white transition-all duration-500"
-              style={{ width: `${focusPercent}%` }}
-            />
-          </div>
+          <ProgressBar value={focusPercent} variant="dark" className="mt-3" />
         </div>
       </div>
 
@@ -133,16 +128,11 @@ export function MonitoringSidebar({
             </div>
             {/* Goal progress */}
             {goal.targetHours > 0 && (
-              <div className="mt-2">
-                <div className="h-1 overflow-hidden bg-zinc-100">
-                  <div
-                    className="h-full bg-zinc-900 transition-all duration-500"
-                    style={{
-                      width: `${Math.min(100, (elapsedMs / ((goal.targetHours * 60 + goal.targetMinutes) * 60_000)) * 100)}%`,
-                    }}
-                  />
-                </div>
-              </div>
+              <ProgressBar
+                value={Math.min(100, (elapsedMs / ((goal.targetHours * 60 + goal.targetMinutes) * 60_000)) * 100)}
+                variant="light"
+                className="mt-2"
+              />
             )}
           </div>
         </div>

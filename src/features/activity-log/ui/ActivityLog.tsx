@@ -1,6 +1,6 @@
 "use client";
 
-import type { ActivityLogEntry } from "@/entities/focus-session/model";
+import type { ActivityLogEntry } from "@/entities/focus-session/models";
 
 interface ActivityLogProps {
   entries: ActivityLogEntry[];

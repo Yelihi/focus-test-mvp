@@ -1,10 +1,33 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/shared/ui";
+import { getSupabaseBrowserClient } from "@/shared/lib/supabase";
+import { useAuth } from "@/shared/lib/supabase";
 
 export function LoginCard() {
   const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push("/session");
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  const handleGoogleLogin = async () => {
+    const supabase = getSupabaseBrowserClient();
+    const origin = window.location.origin;
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${origin}/auth/callback` },
+    });
+  };
+
+  const handleGuestStart = () => {
+    router.push("/session");
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 px-4">
@@ -20,7 +43,7 @@ export function LoginCard() {
           <div className="mt-6 flex flex-col gap-3">
             {/* Google */}
             <button
-              onClick={() => router.push("/session")}
+              onClick={handleGoogleLogin}
               className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-white text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
             >
               <svg width="18" height="18" viewBox="0 0 24 24">
@@ -32,15 +55,12 @@ export function LoginCard() {
               Google로 계속하기
             </button>
 
-            {/* Kakao */}
+            {/* Guest */}
             <button
-              onClick={() => router.push("/session")}
-              className="flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-[#FEE500] text-sm font-medium text-[#191919] transition-colors hover:bg-[#FDD800]"
+              onClick={handleGuestStart}
+              className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-100"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#191919">
-                <path d="M12 3C6.48 3 2 6.36 2 10.44c0 2.62 1.75 4.93 4.38 6.24l-1.12 4.1c-.1.36.32.65.62.43l4.84-3.2c.42.04.85.07 1.28.07 5.52 0 10-3.36 10-7.64S17.52 3 12 3z" />
-              </svg>
-              카카오로 계속하기
+              게스트로 시작
             </button>
           </div>
         </div>

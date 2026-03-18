@@ -1,5 +1,5 @@
 import type { FaceLandmarkerResult } from "@mediapipe/tasks-vision";
-import type { FaceSignals } from "@/entities/focus-session";
+import type { FaceSignals } from "@/entities/face-signal";
 
 /** Extract a named blendshape score from MediaPipe results */
 function getBlendshape(
@@ -106,5 +106,6 @@ export function extractSignals(
         ? 1.0
         : 0,
     timestamp,
+    phoneDetected: false,
   };
 }

@@ -4,7 +4,10 @@
 탭을 전환해도 PiP(Picture-in-Picture) 창으로 집중 상태를 모니터링할 수 있다.
 
 ```
-Camera → MediaPipe FaceLandmarker → FaceSignals → Worker(Score + StateMachine) → PiP HUD
+Camera → MediaPipe FaceLandmarker → FaceSignals ──────────────────────────────┐
+       ↘ MediaPipe ObjectDetector (3 FPS) → phoneDetected → FaceSignals.phoneDetected ┘
+                                                                               ↓
+                                                        Worker(Score + StateMachine) → PiP HUD
 ```
 
 <br/>
@@ -90,7 +93,8 @@ src/
 │   │   └── lib/
 │   │       ├── captureLoop.ts
 │   │       ├── extractSignals.ts
-│   │       └── initLandmarker.ts
+│   │       ├── initLandmarker.ts
+│   │       └── initObjectDetector.ts  # 핸드폰 감지 (EfficientDet-Lite0)
 │   │
 │   ├── focus-scoring/            # 점수 산출, 상태 머신, 커버리지 추적
 │   │   └── lib/
@@ -267,7 +271,18 @@ const roll  = Math.atan2(r21, r22) * toDeg;
 | Head pose | 25% | yaw, pitch 패널티 |
 | Face presence | 10% | 얼굴 감지 신뢰도 |
 
+**학술 근거 vs 경험적 튜닝**:
+
+| 요소 | 근거 | 출처 |
+|------|------|------|
+| EAR (Eye Aspect Ratio) | p2-p6, p3-p5 수직 거리 / 2×수평 거리 | Soukupova & Cech, CVWW 2016 |
+| 시선 방향 (lookOut/lookUp) | 시선 벡터 → 집중 판정 | Zhang et al., CVPR 2015 |
+| Head Pose (yaw/pitch) | 오일러 각도 기반 주의 방향 추정 | Murphy-Chutorian & Trivedi, IEEE TPAMI 2009 |
+| 가중치 (0.3/0.35/0.25/0.1) | 경험적 튜닝 (논문 미참조) | — |
+| pitchDivisor (35 vs 80) | 경험적 튜닝 | — |
+
 **Hard gate**: `faceDetectionConfidence < 0.5`이면 즉시 `score = 0` 반환.
+**Phone gate**: `phoneDetected === true`이면 즉시 `score = 0.35` 반환 (distracted 범위).
 
 ```typescript
 // src/features/focus-scoring/lib/focusScorer.ts
@@ -537,7 +552,7 @@ navigator.mediaSession.setMicrophoneActive(true)
 
 | 모듈 | 테스트 수 | 검증 대상 |
 |------|-----------|-----------|
-| focusScorer | 12 | 가중치 계산, hard gate, study mode 분기, 클램핑 |
+| focusScorer | 14 | 가중치 계산, hard gate, phone gate, study mode 분기, 클램핑 |
 | stateMachine | 13 | 분류, 히스테리시스 전환, 세그먼트 누적, finalize, getLongestContinuousFocus |
 | coverageTracker | 5 | 샘플 기록, 커버리지 퍼센트, 실효 샘플레이트 |
 
@@ -570,6 +585,23 @@ npx playwright test  # E2E tests
 
 <br/>
 
+## 사물 인식 모델 비교: MediaPipe OD vs YOLO
+
+| 항목 | MediaPipe ObjectDetector (EfficientDet-Lite0) | YOLOv8n (ONNX) |
+|------|-----------------------------------------------|----------------|
+| 모델 크기 | 4.4 MB (int8) | ~6 MB |
+| 추론 속도 (CPU) | ~30 ms | ~15–25 ms |
+| GPU 가속 | WebGL delegate 지원 | WebGL 미지원 (ONNX.js CPU/WASM) |
+| 브라우저 통합 | `@mediapipe/tasks-vision` 동일 패키지 | 별도 ONNX Runtime Web 필요 |
+| 추가 의존성 | **없음** (이미 설치됨) | `onnxruntime-web` 추가 필요 |
+| cell phone 클래스 | COCO 80 클래스 포함 | COCO 80 클래스 포함 |
+| 정밀도 (COCO mAP) | 25.0 | 37.3 |
+| 선택 이유 | 동일 패키지 재사용, GPU delegate, 추가 의존성 없음 | — |
+
+**선택: MediaPipe ObjectDetector** — 이미 설치된 `@mediapipe/tasks-vision` 패키지의 `ObjectDetector`를 재사용하므로 번들 크기 증가 없이 핸드폰 감지 추가 가능. WASM fileset도 동일한 `/mediapipe/` 경로를 공유한다.
+
+<br/>
+
 ## 알려진 제한사항 & 향후 계획
 
 - **Auto PiP**: localhost 미지원 (HTTPS 필요)
@@ -581,6 +613,11 @@ npx playwright test  # E2E tests
 <br/>
 
 ## 참고 문서
+
+**Academic Papers:**
+- Soukupova & Cech, CVWW 2016 — EAR 공식 (눈 감김 판정)
+- Zhang et al., CVPR 2015 — 시선 추정 (Appearance-based Gaze Estimation)
+- Murphy-Chutorian & Trivedi, IEEE TPAMI 2009 — Head Pose Estimation Survey
 
 **Browser APIs:**
 - [MediaPipe Face Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker)

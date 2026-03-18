@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth, getSupabaseBrowserClient } from "@/shared/lib/supabase";
 
 interface NavigationMenuProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
     href: "/session",
     label: "모니터링",
     description: "실시간 집중도 측정",
+    requiresAuth: false,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -25,6 +27,7 @@ const NAV_ITEMS = [
     href: "/record",
     label: "개인 기록",
     description: "세션 히스토리 & 통계",
+    requiresAuth: true,
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -37,6 +40,16 @@ const NAV_ITEMS = [
 
 export function NavigationMenu({ isOpen, onClose }: NavigationMenuProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+
+  const displayName =
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    user?.email?.split("@")[0] ??
+    "게스트";
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const avatarInitial = displayName[0]?.toUpperCase() ?? "G";
 
   // shouldRender keeps DOM mounted during exit animation
   const [shouldRender, setShouldRender] = useState(isOpen);
@@ -55,6 +68,13 @@ export function NavigationMenu({ isOpen, onClose }: NavigationMenuProps) {
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
+
+  const handleLogout = async () => {
+    const supabase = getSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    onClose();
+    router.push("/");
+  };
 
   if (!shouldRender) return null;
 
@@ -100,12 +120,23 @@ export function NavigationMenu({ isOpen, onClose }: NavigationMenuProps) {
         {/* User profile area */}
         <div className="border-b border-zinc-100 px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white">
-              U
-            </div>
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="h-9 w-9 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white">
+                {avatarInitial}
+              </div>
+            )}
             <div>
-              <p className="text-sm font-medium text-zinc-900">사용자</p>
-              <p className="text-xs text-zinc-400">집중 모니터링 중</p>
+              <p className="text-sm font-medium text-zinc-900">{displayName}</p>
+              <p className="text-xs text-zinc-400">
+                {isAuthenticated ? "로그인됨" : "게스트 모드"}
+              </p>
             </div>
           </div>
         </div>
@@ -118,6 +149,7 @@ export function NavigationMenu({ isOpen, onClose }: NavigationMenuProps) {
           <div className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
+              const isLocked = item.requiresAuth && !isAuthenticated;
               return (
                 <Link
                   key={item.href}
@@ -126,16 +158,24 @@ export function NavigationMenu({ isOpen, onClose }: NavigationMenuProps) {
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
                     isActive
                       ? "bg-zinc-900 text-white"
-                      : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
+                      : isLocked
+                        ? "cursor-not-allowed text-zinc-300"
+                        : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
                   }`}
                 >
-                  <span className={isActive ? "text-white" : "text-zinc-400"}>
+                  <span className={isActive ? "text-white" : isLocked ? "text-zinc-300" : "text-zinc-400"}>
                     {item.icon}
                   </span>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-sm font-medium leading-none">{item.label}</p>
                     <p className="mt-0.5 text-xs text-zinc-400">{item.description}</p>
                   </div>
+                  {isLocked && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  )}
                 </Link>
               );
             })}
@@ -161,20 +201,32 @@ export function NavigationMenu({ isOpen, onClose }: NavigationMenuProps) {
 
         {/* Footer — logout */}
         <div className="border-t border-zinc-100 px-3 py-3">
-          <button
-            onClick={() => {
-              onClose();
-              // 로그아웃 로직 추가 예정
-            }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            로그아웃
-          </button>
+          {isAuthenticated ? (
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+              로그아웃
+            </button>
+          ) : (
+            <Link
+              href="/"
+              onClick={onClose}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-50 hover:text-zinc-900"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <polyline points="10 17 15 12 10 7" />
+                <line x1="15" y1="12" x2="3" y2="12" />
+              </svg>
+              로그인
+            </Link>
+          )}
         </div>
       </div>
     </>

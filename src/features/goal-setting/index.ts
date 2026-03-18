@@ -1,1 +1,1 @@
-export { GoalSettingModal } from "./ui/GoalSettingModal";
+export { GoalSettingModal } from "./ui";

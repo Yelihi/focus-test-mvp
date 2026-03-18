@@ -1,5 +1,5 @@
+import type { FaceSignals } from "@/entities/face-signal";
 import type {
-  FaceSignals,
   FocusState,
   SessionConfig,
   SessionSummary,

@@ -1,4 +1,5 @@
-import type { FaceSignals, StudyMode } from "@/entities/focus-session";
+import type { FaceSignals } from "@/entities/face-signal";
+import type { StudyMode } from "@/entities/focus-session";
 
 export interface ScoreResult {
   focusScore: number;
@@ -9,18 +10,28 @@ export interface ScoreResult {
  * Compute a focus score (0-1) from face signals.
  *
  * Work mode weights (sum to 1.0):
- *   - Eye openness (EAR):   0.30
- *   - Gaze direction:       0.35
- *   - Head pose:            0.25
- *   - Face presence:        0.10
+ *   - Eye openness (EAR):   0.20
+ *   - Gaze direction:       0.20 (multiplier 1.0 — lenient)
+ *   - Head pose:            0.45 (primary signal: face toward screen)
+ *   - Face presence:        0.15
  *
  * Reading mode weights (sum to 1.0):
  *   - Eye openness (EAR):   0.30
  *   - Gaze direction:       0.15 (looking down is expected)
  *   - Head pose:            0.25
  *   - Face presence:        0.30 (absence is the key indicator)
+ *
+ * Tuning intent (work mode):
+ *   - Looking at screen with natural eye movement → focused
+ *   - Head clearly turned away (~50°+) → distracted
+ *   - Brief gaze away without head movement → no state change
  */
 export function computeFocusScore(signals: FaceSignals, studyMode: StudyMode = "work"): ScoreResult {
+  // ── Phone detected → immediate distracted score ──────────
+  if (signals.phoneDetected) {
+    return { focusScore: 0.35, confidence: signals.faceDetectionConfidence };
+  }
+
   // ── Face presence ────────────────────────────────────────
   if (signals.faceDetectionConfidence < 0.5) {
     return { focusScore: 0, confidence: signals.faceDetectionConfidence };
@@ -46,13 +57,16 @@ export function computeFocusScore(signals: FaceSignals, studyMode: StudyMode = "
     );
   }
   const avgLookAway = Math.max(...lookAwayCandidates);
-  const gazeMultiplier = studyMode === "reading" ? 1.2 : 1.8;
+  // multiplier 1.0: gaze blendshapes are noisy — only penalise strong deviations
+  const gazeMultiplier = 1.0;
   const gazeScore = 1 - clamp(avgLookAway * gazeMultiplier, 0, 1);
 
   // ── Head pose ───────────────────────────────────────────
-  const yawDivisor = studyMode === "reading" ? 45 : 35;
+  // work: ~50° yaw / 40° pitch before full penalty — face turned away from screen
+  // reading: 80° pitch (looking down is normal), 50° yaw
+  const yawDivisor = 50;
   const yawPenalty = clamp(Math.abs(signals.headYaw) / yawDivisor, 0, 1);
-  const pitchDivisor = studyMode === "reading" ? 80 : 30;
+  const pitchDivisor = studyMode === "reading" ? 80 : 40;
   const pitchPenalty = clamp(Math.abs(signals.headPitch) / pitchDivisor, 0, 1);
   const headScore = 1 - Math.max(yawPenalty, pitchPenalty);
 
@@ -65,11 +79,12 @@ export function computeFocusScore(signals: FaceSignals, studyMode: StudyMode = "
       headScore * 0.25 +
       signals.faceDetectionConfidence * 0.3;
   } else {
+    // head pose is primary: face toward screen = focused
     focusScore =
-      eyeScore * 0.3 +
-      gazeScore * 0.35 +
-      headScore * 0.25 +
-      signals.faceDetectionConfidence * 0.1;
+      eyeScore * 0.2 +
+      gazeScore * 0.2 +
+      headScore * 0.45 +
+      signals.faceDetectionConfidence * 0.15;
   }
 
   return {

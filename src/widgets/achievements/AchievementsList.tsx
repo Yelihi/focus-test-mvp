@@ -1,6 +1,7 @@
 "use client";
 
-import type { SessionHistoryEntry } from "@/entities/focus-session/model";
+import type { SessionHistoryEntry } from "@/entities/focus-session/models";
+import { Badge } from "@/shared/ui";
 
 interface Achievement {
   id: string;
@@ -106,9 +107,7 @@ export function AchievementsList({ sessions }: AchievementsListProps) {
               <p className="text-xs text-zinc-500">{a.description}</p>
             </div>
             {a.achievedAt && (
-              <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                {a.achievedAt}
-              </span>
+              <Badge variant="green">{a.achievedAt}</Badge>
             )}
           </div>
         ))}

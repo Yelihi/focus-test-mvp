@@ -1,4 +1,4 @@
-import type { FocusState } from "@/entities/focus-session/model";
+import type { FocusState } from "@/entities/focus-session/models";
 import { detectPipStrategy, type PipStrategy } from "@/shared/lib/featureDetect";
 import { setupAutoPip } from "./setupAutoPip";
 import { createPipCanvasRenderer, type PipCanvasRenderer } from "./pipCanvasRenderer";

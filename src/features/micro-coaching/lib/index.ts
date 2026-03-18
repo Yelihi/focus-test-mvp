@@ -1,0 +1,1 @@
+export { getCoachingMessage } from "./coachingMessages";

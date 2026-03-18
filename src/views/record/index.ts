@@ -1,1 +1,1 @@
-export { RecordPage } from "./RecordPage";
+export { RecordPage } from "./ui";

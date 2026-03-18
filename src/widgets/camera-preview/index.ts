@@ -1,2 +1,2 @@
-export { CameraPreview } from "./CameraPreview";
-export type { CameraStatus } from "./CameraPreview";
+export { CameraPreview } from "./ui/CameraPreview";
+export type { CameraStatus } from "./services/useCamera";

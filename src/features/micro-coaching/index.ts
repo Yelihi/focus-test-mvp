@@ -1,2 +1,2 @@
-export { CoachingToast } from "./ui/CoachingToast";
-export { getCoachingMessage } from "./lib/coachingMessages";
+export { CoachingToast } from "./ui";
+export { getCoachingMessage } from "./lib";

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { SessionSummary } from "@/entities/focus-session";
-import { BREAK_REASON_LABELS } from "@/entities/focus-session";
+import { focusSessionBehavior } from "@/entities/focus-session";
 import { analyzePatterns } from "../lib/analyzePatterns";
 
 interface ReportPanelProps {
@@ -90,7 +90,7 @@ export function ReportPanel({ summary }: ReportPanelProps) {
                 key={reason}
                 className="flex justify-between text-sm text-zinc-600 dark:text-zinc-400"
               >
-                <span>{BREAK_REASON_LABELS[reason]}</span>
+                <span>{focusSessionBehavior.getBreakReasonLabel(reason)}</span>
                 <span className="font-medium">{count}회</span>
               </div>
             ))}

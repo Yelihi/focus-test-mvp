@@ -1,1 +1,1 @@
-export { SessionPage } from "./SessionPage";
+export { SessionPage } from "./ui";
