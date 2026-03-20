@@ -2,6 +2,7 @@ import type { ImageSegmenter } from "@mediapipe/tasks-vision";
 
 export interface BackgroundBlurRenderer {
   setEnabled(enabled: boolean): void;
+  setBackgroundImage(image: HTMLImageElement | null): void;
   destroy(): void;
 }
 
@@ -28,6 +29,7 @@ export function createBackgroundBlurRenderer(
   let cachedMask: Float32Array | null = null;
   const maskImageData = new ImageData(w, h);
   let enabled = false;
+  let backgroundImage: HTMLImageElement | null = null;
   let lastSegmentTs = -1;
 
   // Segmentation loop at ~15 fps
@@ -75,14 +77,18 @@ export function createBackgroundBlurRenderer(
       return;
     }
 
-    // --- Blurred background (mirrored) ---
-    ctx.save();
-    ctx.filter = "blur(12px)";
-    ctx.translate(w, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, w, h);
-    ctx.restore();
-    ctx.filter = "none";
+    // --- Background layer ---
+    if (backgroundImage) {
+      ctx.drawImage(backgroundImage, 0, 0, w, h);
+    } else {
+      ctx.save();
+      ctx.filter = "blur(12px)";
+      ctx.translate(w, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, w, h);
+      ctx.restore();
+      ctx.filter = "none";
+    }
 
     // --- Person layer: draw mirrored video then mask out background ---
     personCtx.globalCompositeOperation = "source-over";
@@ -129,6 +135,9 @@ export function createBackgroundBlurRenderer(
     setEnabled(val: boolean) {
       enabled = val;
       if (!val) cachedMask = null;
+    },
+    setBackgroundImage(image: HTMLImageElement | null) {
+      backgroundImage = image;
     },
     destroy() {
       if (rafId !== null) cancelAnimationFrame(rafId);

@@ -2,7 +2,9 @@
 
 import type { RefObject } from "react";
 import type { CameraStatus } from "../config/constants";
-import { Switch, Select, Button } from "@/shared/ui";
+import { Select, Button } from "@/shared/ui";
+import { BACKGROUND_PRESETS } from "@/features/background-blur";
+import type { BackgroundMode } from "@/features/background-blur";
 
 interface CameraPreviewProps {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -10,13 +12,13 @@ interface CameraPreviewProps {
   cameraStatus: CameraStatus;
   cameraError: string | null;
   isStreaming: boolean;
-  backgroundBlur: boolean;
+  backgroundMode: BackgroundMode;
   blurLoading: boolean;
   devices: MediaDeviceInfo[];
   selectedDeviceId: string;
   onDeviceSelect: (e: React.ChangeEvent<HTMLSelectElement>) => void;
   onStartCamera: (deviceId?: string) => void;
-  onToggleBlur: () => void;
+  onBackgroundModeChange: (mode: BackgroundMode) => void;
 }
 
 export function CameraPreview({
@@ -25,14 +27,16 @@ export function CameraPreview({
   cameraStatus,
   cameraError,
   isStreaming,
-  backgroundBlur,
+  backgroundMode,
   blurLoading,
   devices,
   selectedDeviceId,
   onDeviceSelect,
   onStartCamera,
-  onToggleBlur,
+  onBackgroundModeChange,
 }: CameraPreviewProps) {
+  const showCanvas = backgroundMode.type !== "none" && isStreaming;
+
   return (
     <div>
       <div className="flex items-center gap-2 text-sm font-medium text-zinc-700 mb-2">
@@ -47,15 +51,15 @@ export function CameraPreview({
       <div className="relative w-full aspect-video rounded-xl overflow-hidden bg-zinc-900">
         <video
           ref={videoRef}
-          className={`h-full w-full -scale-x-100 object-cover${backgroundBlur && isStreaming ? " hidden" : ""}`}
+          className={`h-full w-full -scale-x-100 object-cover${showCanvas ? " hidden" : ""}`}
           playsInline
           muted
         />
         <canvas
           ref={blurCanvasRef}
-          className={`h-full w-full object-cover${backgroundBlur && isStreaming ? "" : " hidden"}`}
+          className={`h-full w-full object-cover${showCanvas ? "" : " hidden"}`}
         />
-        {backgroundBlur && isStreaming && blurLoading && (
+        {showCanvas && blurLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/60">
             <svg className="h-6 w-6 animate-spin text-zinc-400" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -110,7 +114,6 @@ export function CameraPreview({
           )}
         </Select>
 
-        {/* "카메라 켜기" button — only shown when not streaming */}
         {!isStreaming && (
           <Button
             variant="secondary"
@@ -127,20 +130,56 @@ export function CameraPreview({
         )}
       </div>
 
-      {/* Background blur toggle */}
-      <div className="mt-2 flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2">
-        <div className="flex items-center gap-2 text-sm text-zinc-700">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="12" cy="12" r="3" />
-            <line x1="12" y1="2" x2="12" y2="5" />
-            <line x1="12" y1="19" x2="12" y2="22" />
-            <line x1="2" y1="12" x2="5" y2="12" />
-            <line x1="19" y1="12" x2="22" y2="12" />
-          </svg>
-          배경 블러
+      {/* Background preset selector */}
+      <div className="mt-2 rounded-lg border border-zinc-200 px-3 py-2">
+        <p className="text-xs font-medium text-zinc-500 mb-2">배경</p>
+        <div className="flex flex-wrap gap-2">
+          {BACKGROUND_PRESETS.map((preset) => {
+            const isSelected =
+              preset.mode.type === backgroundMode.type &&
+              (preset.mode.type !== "image" ||
+                (backgroundMode.type === "image" && backgroundMode.src === preset.mode.src));
+            return (
+              <button
+                key={preset.id}
+                onClick={() => onBackgroundModeChange(preset.mode)}
+                className={`flex flex-col items-center gap-1 rounded-lg border p-1.5 text-xs transition-colors ${
+                  isSelected
+                    ? "border-zinc-900 bg-zinc-900 text-white"
+                    : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                }`}
+              >
+                {preset.thumbnail ? (
+                  <img
+                    src={preset.thumbnail}
+                    alt={preset.label}
+                    className="h-10 w-14 rounded object-cover"
+                  />
+                ) : preset.mode.type === "blur" ? (
+                  <div className={`flex h-10 w-14 items-center justify-center rounded ${isSelected ? "bg-zinc-700" : "bg-zinc-100"}`}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <circle cx="12" cy="12" r="3" />
+                      <line x1="12" y1="2" x2="12" y2="5" />
+                      <line x1="12" y1="19" x2="12" y2="22" />
+                      <line x1="2" y1="12" x2="5" y2="12" />
+                      <line x1="19" y1="12" x2="22" y2="12" />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className={`flex h-10 w-14 items-center justify-center rounded ${isSelected ? "bg-zinc-700" : "bg-zinc-100"}`}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="3" y1="9" x2="21" y2="9" />
+                      <line x1="9" y1="21" x2="9" y2="9" />
+                    </svg>
+                  </div>
+                )}
+                <span>{preset.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <Switch checked={backgroundBlur} onChange={() => onToggleBlur()} />
       </div>
     </div>
   );

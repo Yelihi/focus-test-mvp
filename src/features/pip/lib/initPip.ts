@@ -15,9 +15,12 @@ export interface PipHandle {
  * Creates a canvas renderer that composites video + focus state badge,
  * then uses the canvas-backed video as the PiP target.
  */
-export function initPip(video: HTMLVideoElement): PipHandle {
+export function initPip(
+  video: HTMLVideoElement,
+  getSource?: () => HTMLVideoElement | HTMLCanvasElement,
+): PipHandle {
   const strategy = detectPipStrategy();
-  const renderer = createPipCanvasRenderer(video);
+  const renderer = createPipCanvasRenderer(getSource ?? (() => video));
 
   let autoCleanup: (() => void) | null = null;
   if (strategy === "auto") {

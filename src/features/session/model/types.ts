@@ -29,4 +29,5 @@ export interface ICaptureController {
   stop(): void;
   enterBackground(): void;
   enterForeground(): void;
+  setRawResultCallback?(cb: ((result: import("@mediapipe/tasks-vision").FaceLandmarkerResult) => void) | null): void;
 }

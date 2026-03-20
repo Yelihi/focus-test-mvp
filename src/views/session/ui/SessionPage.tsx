@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState, useCallback, useMemo } from "react";
+import { useRef, useState, useCallback, useMemo, useEffect } from "react";
 import { useSessionBlur } from "@/features/background-blur";
+import type { BackgroundMode } from "@/features/background-blur";
+import { AvatarCanvas, useAvatarDriver } from "@/features/avatar";
 import { useActivityLog } from "./useActivityLog";
 import { useStudyMode } from "./useStudyMode";
 import { useTimetable } from "./useTimetable";
@@ -26,8 +28,33 @@ export function SessionPage() {
   // DOM refs
   const mainVideoRef = useRef<HTMLVideoElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const avatarCanvasRef = useRef<HTMLCanvasElement>(null);
   const managerRef = useRef<SessionManager | null>(null);
   const blur = useSessionBlur({ videoRef: mainVideoRef, canvasRef: blurCanvasRef });
+
+  // Mirror backgroundBlurEnabled into a ref so getBlurSource stays stable
+  const backgroundBlurEnabledRef = useRef(false);
+  useEffect(() => {
+    backgroundBlurEnabledRef.current = blur.backgroundBlurEnabled;
+  }, [blur.backgroundBlurEnabled]);
+
+  // Avatar state
+  const [avatarEnabled, setAvatarEnabled] = useState(false);
+  const avatarEnabledRef = useRef(false);
+  useEffect(() => {
+    avatarEnabledRef.current = avatarEnabled;
+  }, [avatarEnabled]);
+
+  const getBlurSource = useCallback(
+    (): HTMLVideoElement | HTMLCanvasElement => {
+      if (avatarEnabledRef.current && avatarCanvasRef.current)
+        return avatarCanvasRef.current;
+      if (backgroundBlurEnabledRef.current && blurCanvasRef.current)
+        return blurCanvasRef.current;
+      return mainVideoRef.current!;
+    },
+    [],
+  );
 
   // UI-only modal state
   const [showGoalModal, setShowGoalModal] = useState(false);
@@ -52,7 +79,7 @@ export function SessionPage() {
     handleStop,
     handleTogglePip,
     resetLifecycle,
-  } = useSessionLifecycle({ addActivity, studyMode, managerRef });
+  } = useSessionLifecycle({ addActivity, studyMode, managerRef, getBlurSource });
 
   const { timetableEntries, currentTime, sessionEndTime, resetTimetable } =
     useTimetable(sessionState.status, sessionState.focusState);
@@ -68,8 +95,20 @@ export function SessionPage() {
     resetSessionData,
   } = useSessionData({ sessionState, sessionStartedAtRef, managerRef });
 
+  // Derived values
+  const { status, focusState } = sessionState;
+  const { backgroundBlurEnabled, backgroundMode, blurLoading } = blur;
+  const isActive = status === "running" || status === "break";
+
+  // Avatar driver — only active when session is running
+  const { interpolator } = useAvatarDriver({
+    managerRef,
+    enabled: avatarEnabled && status === "running",
+  });
+
   // Cross-hook coordination handlers
-  const handleNewSession = useCallback(() => {
+  const handleStopAndCleanup = useCallback(() => {
+    handleStop();
     resetLifecycle();
     blur.cleanupBlur();
     if (mainVideoRef.current?.srcObject) {
@@ -80,30 +119,28 @@ export function SessionPage() {
     resetActivityLog();
     resetTimetable();
     resetSessionData();
-  }, [resetLifecycle, blur.cleanupBlur, resetActivityLog, resetTimetable, resetSessionData]);
+    setAvatarEnabled(false);
+  }, [handleStop, resetLifecycle, blur.cleanupBlur, resetActivityLog, resetTimetable, resetSessionData]);
 
   const handleGoalStart = useCallback(
-    async (newGoal: SessionGoal, stream: MediaStream, backgroundBlur: boolean) => {
+    async (newGoal: SessionGoal, stream: MediaStream, backgroundMode: BackgroundMode, avatarEnabled: boolean) => {
       setGoal(newGoal);
+      setAvatarEnabled(avatarEnabled);
       setShowGoalModal(false);
       const video = mainVideoRef.current!;
       video.srcObject = stream;
       await video.play();
-      await blur.initBlurFromModal(backgroundBlur);
+      await blur.initFromModal(backgroundMode);
       await handleStart(video);
     },
-    [setGoal, blur.initBlurFromModal, handleStart],
+    [setGoal, blur.initFromModal, handleStart],
   );
 
-  // Derived values
-  const { status, focusState } = sessionState;
-  const { backgroundBlurEnabled, blurLoading } = blur;
   const focusedMs = useMemo(
     () => Math.round(sessionState.elapsedMs * sessionState.focusScore),
     [sessionState.elapsedMs, sessionState.focusScore],
   );
   const focusBadge = FOCUS_STATE_BADGE[focusState];
-  const isActive = status === "running" || status === "break";
 
   const timeDisplay = currentTime.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
@@ -154,6 +191,17 @@ export function SessionPage() {
               className={`h-full w-full object-cover${backgroundBlurEnabled ? "" : " hidden"}`}
             />
 
+            {/* Avatar overlay */}
+            {avatarEnabled && status === "running" && (
+              <div className="absolute inset-0 z-10 bg-zinc-900">
+                <AvatarCanvas
+                  ref={avatarCanvasRef}
+                  interpolator={interpolator}
+                  className="h-full w-full"
+                />
+              </div>
+            )}
+
             {/* Idle overlay */}
             {status === "idle" && !showGoalModal && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-zinc-950">
@@ -171,17 +219,17 @@ export function SessionPage() {
               </div>
             )}
 
-            {/* Recording indicator */}
+            {/* Recording indicator (z-20) */}
             {status === "running" && (
-              <div className="absolute left-4 top-4 flex items-center gap-2 rounded bg-black/70 px-3 py-1.5 backdrop-blur-sm">
+              <div className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded bg-black/70 px-3 py-1.5 backdrop-blur-sm">
                 <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
                 <span className="font-mono text-xs font-medium text-white">{formatRecordingTime(sessionState.elapsedMs)}</span>
               </div>
             )}
 
-            {/* Focus state badge */}
+            {/* Focus state badge (z-20) */}
             {status === "running" && (
-              <div className={`absolute right-4 top-4 flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium backdrop-blur-sm ${focusBadge.bg} ${focusBadge.text}`}>
+              <div className={`absolute right-4 top-4 z-20 flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium backdrop-blur-sm ${focusBadge.bg} ${focusBadge.text}`}>
                 <div className={`h-1.5 w-1.5 rounded-full ${focusBadge.dot}`} />
                 {focusBadge.label}
               </div>
@@ -196,15 +244,15 @@ export function SessionPage() {
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+            {/* Action buttons (z-30) */}
+            <div className="absolute bottom-8 left-1/2 z-30 -translate-x-1/2">
               <ActionButtons
                 status={status}
                 isLoading={isLoading}
                 onStart={() => setShowGoalModal(true)}
                 onPause={handleBreak}
-                onReset={handleStop}
-                onNewSession={handleNewSession}
+                onReset={handleStopAndCleanup}
+                onNewSession={() => setShowGoalModal(true)}
                 pipStrategy={pipStrategy}
                 onTogglePip={handleTogglePip}
               />
@@ -212,7 +260,7 @@ export function SessionPage() {
 
             {/* Error banner */}
             {error && (
-              <div className="absolute left-4 right-4 top-16 rounded bg-red-500/90 px-4 py-2 text-center text-sm text-white backdrop-blur-sm">
+              <div className="absolute left-4 right-4 top-16 z-20 rounded bg-red-500/90 px-4 py-2 text-center text-sm text-white backdrop-blur-sm">
                 {error}
               </div>
             )}
@@ -297,13 +345,15 @@ export function SessionPage() {
       <SessionSettingsPopup
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
-        backgroundBlurEnabled={backgroundBlurEnabled}
-        onToggleBlur={blur.toggleBlur}
+        backgroundMode={backgroundMode}
+        onBackgroundModeChange={blur.setBackgroundMode}
         blurLoading={blurLoading}
         studyMode={studyMode}
         onStudyModeChange={handleStudyModeChange}
         goal={goal}
         onGoalUpdate={setGoal}
+        avatarEnabled={avatarEnabled}
+        onAvatarToggle={setAvatarEnabled}
       />
       <BreakModalContainer
         status={sessionState.status}

@@ -29,6 +29,7 @@ interface UseSessionLifecycleOptions {
   addActivity: (type: ActivityLogEntry["type"], message: string) => void;
   studyMode: StudyMode;
   managerRef: MutableRefObject<SessionManager | null>;
+  getBlurSource?: () => HTMLVideoElement | HTMLCanvasElement;
 }
 
 export interface UseSessionLifecycleReturn {
@@ -51,6 +52,7 @@ export function useSessionLifecycle({
   addActivity,
   studyMode,
   managerRef,
+  getBlurSource,
 }: UseSessionLifecycleOptions): UseSessionLifecycleReturn {
   const landmarkerRef = useRef<FaceLandmarker | null>(null);
   const pipRef = useRef<PipHandle | null>(null);
@@ -110,7 +112,7 @@ export function useSessionLifecycle({
         });
 
         pipRef.current?.cleanup();
-        pipRef.current = initPip(video);
+        pipRef.current = initPip(video, getBlurSource);
 
         await manager.start(video, landmarker, objectDetector);
       } catch (err) {

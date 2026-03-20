@@ -9,4 +9,4 @@ export {
   initSegmenter,
   destroySegmenter,
 } from "./lib";
-export type { SignalCallback } from "./lib";
+export type { SignalCallback, RawResultCallback } from "./lib";

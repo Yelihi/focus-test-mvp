@@ -16,7 +16,7 @@ const STATE_CONFIG: Record<FocusState, { color: string; label: string }> = {
 };
 
 export function createPipCanvasRenderer(
-  sourceVideo: HTMLVideoElement,
+  getSource: () => HTMLVideoElement | HTMLCanvasElement,
 ): PipCanvasRenderer {
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
@@ -26,11 +26,21 @@ export function createPipCanvasRenderer(
   let currentState: FocusState = "focused";
 
   function render() {
-    // Draw mirrored video frame
-    ctx.save();
-    ctx.scale(-1, 1);
-    ctx.drawImage(sourceVideo, -WIDTH, 0, WIDTH, HEIGHT);
-    ctx.restore();
+    const source = getSource();
+    if (source instanceof HTMLCanvasElement) {
+      // Flush WebGL GPU pipeline so preserveDrawingBuffer content is readable
+      const webgl =
+        (source.getContext("webgl2") as WebGL2RenderingContext | null) ??
+        (source.getContext("webgl") as WebGLRenderingContext | null);
+      webgl?.finish();
+      ctx.drawImage(source, 0, 0, WIDTH, HEIGHT);
+    } else {
+      // Raw video — apply mirror
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(source, -WIDTH, 0, WIDTH, HEIGHT);
+      ctx.restore();
+    }
 
     // Draw badge (not mirrored)
     const { color, label } = STATE_CONFIG[currentState];

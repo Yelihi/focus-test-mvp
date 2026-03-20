@@ -1,10 +1,11 @@
-import type { FaceLandmarker, ObjectDetector } from "@mediapipe/tasks-vision";
+import type { FaceLandmarker, FaceLandmarkerResult, ObjectDetector } from "@mediapipe/tasks-vision";
 import type { FaceSignals } from "@/entities/face-signal";
 import { CaptureTimer } from "@/shared/lib/timer";
 import { ABSENT_FRAME_THRESHOLD, PHONE_DETECT_INTERVAL } from "../config/constants";
 import { extractSignals } from "./extractSignals";
 
 export type SignalCallback = (signals: FaceSignals) => void;
+export type RawResultCallback = (result: FaceLandmarkerResult) => void;
 
 export class CaptureLoop {
   private timer: CaptureTimer;
@@ -12,6 +13,7 @@ export class CaptureLoop {
   private objectDetector: ObjectDetector | null = null;
   private videoEl: HTMLVideoElement | null = null;
   private onSignals: SignalCallback | null = null;
+  private onRawResult: RawResultCallback | null = null;
   private lastTimestampMs = -1;
   private lastObjectTimestampMs = -1;
   private noFaceFrames = 0;
@@ -47,6 +49,10 @@ export class CaptureLoop {
     this.timer.stop();
   }
 
+  setRawResultCallback(cb: RawResultCallback | null): void {
+    this.onRawResult = cb;
+  }
+
   private processFrame(timestamp: number): void {
     if (!this.landmarker || !this.videoEl || !this.onSignals) return;
     if (this.videoEl.readyState < 2) return;
@@ -63,6 +69,7 @@ export class CaptureLoop {
 
     try {
       const result = this.landmarker.detectForVideo(this.videoEl, nowMs);
+      if (this.onRawResult) this.onRawResult(result);
       const signals = extractSignals(result, nowMs);
 
       // Run phone detection every PHONE_DETECT_INTERVAL frames

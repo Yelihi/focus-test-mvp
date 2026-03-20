@@ -2,12 +2,13 @@
 
 import { useRef, useState, useEffect, type RefObject } from "react";
 import type { BackgroundBlurRenderer } from "../lib/backgroundBlurRenderer";
-import { createBlurSession } from "../lib/createBlurSession";
+import { createBlurSession, loadBackgroundImage } from "../lib";
+import type { BackgroundMode } from "../model/types";
 
 interface UseBlurPreviewParams {
   videoRef: RefObject<HTMLVideoElement | null>;
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  enabled: boolean;
+  backgroundMode: BackgroundMode;
   streaming: boolean;
 }
 
@@ -18,14 +19,14 @@ interface UseBlurPreviewReturn {
 export function useBlurPreview({
   videoRef,
   canvasRef,
-  enabled,
+  backgroundMode,
   streaming,
 }: UseBlurPreviewParams): UseBlurPreviewReturn {
   const [loading, setLoading] = useState(false);
   const rendererRef = useRef<BackgroundBlurRenderer | null>(null);
 
   useEffect(() => {
-    if (!enabled || !streaming) {
+    if (backgroundMode.type === "none" || !streaming) {
       rendererRef.current?.destroy();
       rendererRef.current = null;
       setLoading(false);
@@ -46,7 +47,17 @@ export function useBlurPreview({
           renderer.destroy();
           return;
         }
-        rendererRef.current = renderer;
+
+        if (backgroundMode.type === "image") {
+          try {
+            const img = await loadBackgroundImage(backgroundMode.src);
+            if (!cancelled) renderer.setBackgroundImage(img);
+          } catch {
+            // Image load failed — fall back to blur
+          }
+        }
+
+        if (!cancelled) rendererRef.current = renderer;
       } catch {
         // Blur init failed — silently ignore, video stays visible
       } finally {
@@ -60,7 +71,7 @@ export function useBlurPreview({
       rendererRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, streaming]);
+  }, [backgroundMode.type, (backgroundMode as { src?: string }).src, streaming]);
 
   return { loading };
 }

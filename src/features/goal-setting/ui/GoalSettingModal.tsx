@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import type { SessionGoal } from "@/entities/focus-session/models";
 import { useBlurPreview } from "@/features/background-blur";
+import type { BackgroundMode } from "@/features/background-blur";
 import { destroySegmenter } from "@/features/detection";
 import { Modal, Button } from "@/shared/ui";
 import { useCamera } from "./useCamera";
@@ -10,7 +11,7 @@ import { CameraPreview } from "./CameraPreview";
 import { GoalForm } from "./GoalForm";
 
 interface GoalSettingModalProps {
-  onStart: (goal: SessionGoal, stream: MediaStream, backgroundBlur: boolean) => void;
+  onStart: (goal: SessionGoal, stream: MediaStream, backgroundMode: BackgroundMode, avatarEnabled: boolean) => void;
   onCancel: () => void;
 }
 
@@ -19,7 +20,8 @@ export function GoalSettingModal({ onStart, onCancel }: GoalSettingModalProps) {
   const [minutes, setMinutes] = useState(0);
   const [focusPercent, setFocusPercent] = useState(70);
   const [dailyGoalText, setDailyGoalText] = useState("");
-  const [backgroundBlur, setBackgroundBlur] = useState(false);
+  const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>({ type: "none" });
+  const [avatarEnabled, setAvatarEnabled] = useState(false);
 
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
   const camera = useCamera();
@@ -27,7 +29,7 @@ export function GoalSettingModal({ onStart, onCancel }: GoalSettingModalProps) {
   const { loading: blurLoading } = useBlurPreview({
     videoRef: camera.videoRef,
     canvasRef: blurCanvasRef,
-    enabled: backgroundBlur,
+    backgroundMode,
     streaming: camera.isStreaming,
   });
 
@@ -42,7 +44,8 @@ export function GoalSettingModal({ onStart, onCancel }: GoalSettingModalProps) {
         dailyGoalText: dailyGoalText.trim() || undefined,
       },
       camera.streamRef.current,
-      backgroundBlur,
+      backgroundMode,
+      avatarEnabled,
     );
   };
 
@@ -80,13 +83,13 @@ export function GoalSettingModal({ onStart, onCancel }: GoalSettingModalProps) {
           cameraStatus={camera.cameraStatus}
           cameraError={camera.cameraError}
           isStreaming={camera.isStreaming}
-          backgroundBlur={backgroundBlur}
+          backgroundMode={backgroundMode}
           blurLoading={blurLoading}
           devices={camera.devices}
           selectedDeviceId={camera.selectedDeviceId}
           onDeviceSelect={camera.handleDeviceSelect}
           onStartCamera={camera.startCamera}
-          onToggleBlur={() => setBackgroundBlur((v) => !v)}
+          onBackgroundModeChange={setBackgroundMode}
         />
 
         <hr className="border-zinc-100" />
@@ -101,6 +104,23 @@ export function GoalSettingModal({ onStart, onCancel }: GoalSettingModalProps) {
           onFocusPercentChange={setFocusPercent}
           onDailyGoalTextChange={setDailyGoalText}
         />
+
+        <hr className="border-zinc-100" />
+
+        {/* Avatar toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-zinc-700">3D 아바타</p>
+            <p className="text-xs text-zinc-500">카메라 대신 아바타를 표시합니다</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAvatarEnabled((v) => !v)}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${avatarEnabled ? "bg-zinc-900" : "bg-zinc-200"}`}
+          >
+            <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${avatarEnabled ? "translate-x-4" : "translate-x-0"}`} />
+          </button>
+        </div>
 
         <hr className="border-zinc-100" />
 

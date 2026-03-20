@@ -2,5 +2,5 @@ export { initLandmarker, getLandmarker, destroyLandmarker } from "./initLandmark
 export { initObjectDetector, destroyObjectDetector } from "./initObjectDetector";
 export { extractSignals } from "./extractSignals";
 export { CaptureLoop } from "./captureLoop";
-export type { SignalCallback } from "./captureLoop";
+export type { SignalCallback, RawResultCallback } from "./captureLoop";
 export { initSegmenter, destroySegmenter } from "./initSegmenter";

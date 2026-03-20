@@ -212,6 +212,10 @@ export class SessionManager {
     this.distractedAlertListeners.clear();
   }
 
+  setRawResultCallback(cb: ((result: import("@mediapipe/tasks-vision").FaceLandmarkerResult) => void) | null): void {
+    this.capture.setRawResultCallback?.(cb);
+  }
+
   setStudyMode(mode: StudyMode): void {
     this.config = { ...this.config, studyMode: mode };
     this.bridge.send({ type: "CHANGE_MODE", studyMode: mode });
